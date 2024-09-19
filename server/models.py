@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy_serializer import SerializerMixin
+from sqlalchemy.orm import validates
 
 
 # naming convention for db constraints (fixes an alembic bug)
@@ -64,6 +65,13 @@ class Review(db.Model, SerializerMixin):
 
     # exclude item and customer reviews from serializaton because each review would contain reviews, and so on
     serialize_rules = ['-customer.reviews', '-item.reviews']
+
+    @validates('comment')
+    def validate_comment(self, key, new_comment):
+        if len(new_comment) <= 0:
+            raise ValueError("need to leave a comment")
+        return new_comment
+
 
     def __repr__(self):
         return f'<Review {self.id}, {self.comment}, {self.customer_id}, {self.item_id}>'

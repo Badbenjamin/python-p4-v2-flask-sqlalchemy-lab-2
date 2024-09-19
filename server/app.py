@@ -53,6 +53,25 @@ def one_customer(id):
         db.session.delete(customer)
         db.session.commit()
         return {}, 200
+    
+@app.route('/reviews', methods=['GET', 'POST'])
+def get_reviews():
+    reviews = Review.query.all()
+    if request.method == 'GET':
+        review_list = []
+        for review in reviews:
+            review_list.append(review.to_dict())
+        return review_list, 200
+    if request.method == 'POST':
+        data = request.get_json()
+        new_review = Review(
+            comment=data.get('comment'),
+            customer_id=data.get('customer_id'),
+            item_id=data.get('item_id')
+        )
+        db.session.add(new_review)
+        db.session.commit()
+        return new_review.to_dict()
 
 
 
