@@ -3,6 +3,8 @@ from sqlalchemy import MetaData
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy_serializer import SerializerMixin
 from sqlalchemy.orm import validates
+from flask_bcrypt import Bcrypt
+from sqlalchemy.ext.hybrid import hybrid_property
 
 
 # naming convention for db constraints (fixes an alembic bug)
@@ -18,6 +20,9 @@ convention = {
 # init sqlalchemy object
 db = SQLAlchemy(metadata=MetaData(naming_convention=convention))
 
+# init bcrypt
+bcrypt = Bcrypt()
+
 
 class Customer(db.Model, SerializerMixin):
     __tablename__ = 'customers'
@@ -30,7 +35,8 @@ class Customer(db.Model, SerializerMixin):
     # relationship to review table created. 
     # customer.reviews gives list of reviews
     # one customer can have multiple reviews
-    reviews = db.relationship('Review', back_populates='customer')
+    # cascade arg will delete reviews that are orphaned when customer is deleted
+    reviews = db.relationship('Review', back_populates='customer', cascade='all, delete-orphan')
 
     # creates a link btw cusomer and item
     # customer.item can be called
@@ -68,7 +74,9 @@ class Review(db.Model, SerializerMixin):
 
     @validates('comment')
     def validate_comment(self, key, new_comment):
+        print(key)
         if len(new_comment) <= 0:
+            
             raise ValueError("need to leave a comment")
         return new_comment
 
@@ -88,9 +96,42 @@ class Item(db.Model, SerializerMixin):
     # relationship created to Review
     # item.reviews will give the item's reviews
     # one item can have multiple reviews
-    reviews = db.relationship('Review', back_populates='item')
+    # if item is deleted, reviews (now orphaned, no item), will be deleted 
+    reviews = db.relationship('Review', back_populates='item', cascade='all, delete-orphan')
 
     serialize_rules = ['-reviews.item']
 
     def __repr__(self):
         return f'<Item {self.id}, {self.name}, {self.price}>'
+    
+
+class User(db.Model, SerializerMixin):
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String, nullable=False, unique=True)
+    password_hash = db.Column(db.String)
+
+    # kind of like getter function
+    # user.password calls password(self) and returns password_hash
+    @hybrid_property
+    def password(self):
+        """return pw hash"""
+        return self.password_hash
+    
+    # kind of like setter function
+    #  takes a plain text pw and sets self.password_hash to the hashed pw 
+    @password.setter
+    def password(self, plain_text_pw):
+        """hashes the plain text pw"""
+        bytes = plain_text_pw.encode('utf-8') # convert pt_pw into raw bytes
+        self.password_hash = bcrypt.generate_password_hash(bytes) #hash the bytes
+
+    
+    # this function is used to test if a given password matches the user's pw
+    # if user.authenticate("pw") returns true, then the password hash matches the one in the DB
+    def authenticate(self, password):
+        return bcrypt.check_password_hash(
+            self.password_hash, #hashed pw
+            password.encode('utf-8') # plain text pw
+        )

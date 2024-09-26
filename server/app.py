@@ -4,6 +4,7 @@ from flask_migrate import Migrate
 from sqlalchemy_serializer import SerializerMixin
 from models import db, Customer, Item, Review
 
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -11,8 +12,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 migrate = Migrate(app, db)
 
 db.init_app(app)
-
-
 
 
 @app.route('/')
@@ -71,7 +70,61 @@ def get_reviews():
         )
         db.session.add(new_review)
         db.session.commit()
-        return new_review.to_dict()
+        return new_review.to_dict(), 200
+    
+# get all items, new syntax for single request type
+@app.get('/items')
+def get_all_items():
+    items = Item.query.all()
+    # to_dict takes serialization rules as an arg
+    return [item.to_dict(rules=['-reviews']) for item in items], 200
+
+# post item
+@app.post('/items')
+def post_items():
+    data = request.get_json()
+    new_item =  Item(
+        name=data.get('name'),
+        price=data.get('price')
+    )
+    db.session.add(new_item)
+    db.session.commit()
+    return new_item.to_dict(), 201
+# get item by id
+@app.get('/items/<int:id>')
+def get_item_by_id(id):
+    item = Item.query.filter(Item.id == id).first()
+
+    if item is None:
+        return {'error' : 'item not found'}, 404
+    else:
+        return item.to_dict(), 200
+
+# patch item by id
+@app.patch('/items/<int:id>')
+def patch_item_by_id(id):
+    item = Item.query.filter(Item.id == id).first()
+    data = request.get_json()
+    # grab json data, loop through json data, set attribute on item using json data
+    for attr in data:
+        if attr not in ['id']:
+            setattr(item, attr, data[attr])
+    db.session.add(item)
+    db.session.commit()
+    return item.to_dict(), 200
+    
+
+# delete item by id
+@app.delete('/items/<int:id>')
+def delete_item(id):
+    item = Item.query.filter(Item.id == id).first()
+    if item is None:
+        return {'error' : "item does not exits"}, 404
+    else:
+        db.session.delete(item)
+        db.session.commit()
+        return {}, 200
+
 
 
 
